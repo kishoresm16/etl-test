@@ -1,0 +1,4 @@
+dnspython
+bs4
+requests
+PyPDF2
