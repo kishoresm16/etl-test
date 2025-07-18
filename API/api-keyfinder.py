@@ -57,7 +57,7 @@ PI_KEY_PATTERNS = {
 
 def parse_args():
     parser = argparse.ArgumentParser(description="API Key Scanner for .js Files")
-    parser.add_argument("-d", "--domain", help="Single domain to check (e.g., example.com)", nargs="+")
+    parser.add_argument("-d", "--domain", help="Single or multiple domains to check (e.g., example.com)", nargs="+")
     parser.add_argument("-D", "--domain-list", help="File containing list of subdomains (one per line)")
     parser.add_argument("--output", nargs="+", help="Output format (json) followed by optional filename (e.g., json output.json)")
     return parser.parse_args()
@@ -163,9 +163,14 @@ def main():
         for _, url, error in errors:
             domain_result["errors"].append({"url": url, "details": error})
         
+        all_findings = []
         for js_file in js_files:
             findings = scan_js_file(js_file)
-            domain_result["findings"].extend(findings)
+            all_findings.extend(findings)
+        
+        # Remove duplicates based on type, value, and file
+        unique_findings = [dict(t) for t in {tuple(f.items()) for f in all_findings}]
+        domain_result["findings"].extend(unique_findings)
         
         results.append(domain_result)
 
