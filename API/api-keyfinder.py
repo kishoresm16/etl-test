@@ -49,7 +49,7 @@ PI_KEY_PATTERNS = {
     "amazon_mws_auth_token": r'amzn\.mws\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',
     "facebook_access_token": r'[A-Za-z0-9]{125}',
     "facebook_oauth": r'EAACEdEose0cBA[0-9A-Za-z]+',
-    "telegram_bot_api_token": r'[0-9]{15}:[0-9A-Za-z_]{32}',
+    "telegram_bot_api_token": r'[0-9]{15}:[A-Za-z0-9_]{32}',
     "twitter_access_token": r'[1-9][0-9]+-[0-9a-zA-Z]{24}',
     "twilio_api_key_alt": r'SK[0-9a-fA-F]{32}',
     "generic_secret": r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}',
@@ -57,7 +57,7 @@ PI_KEY_PATTERNS = {
 
 def parse_args():
     parser = argparse.ArgumentParser(description="API Key Scanner for .js Files")
-    parser.add_argument("-d", "--domain", help="Single or multiple domains to check (e.g., example.com)", nargs="+")
+    parser.add_argument("-d", "--domain", help="Single domain to check (e.g., example.com)", nargs="+")
     parser.add_argument("-D", "--domain-list", help="File containing list of subdomains (one per line)")
     parser.add_argument("--output", nargs="+", help="Output format (json) followed by optional filename (e.g., json output.json)")
     return parser.parse_args()
@@ -163,15 +163,25 @@ def main():
         for _, url, error in errors:
             domain_result["errors"].append({"url": url, "details": error})
         
+        # Collect all findings
         all_findings = []
         for js_file in js_files:
-            findings = scan_js_file(js_file)
-            all_findings.extend(findings)
+            all_findings.extend(scan_js_file(js_file))
         
-        # Remove duplicates based on type, value, and file
-        unique_findings = [dict(t) for t in {tuple(f.items()) for f in all_findings}]
+        # Deduplicate findings based on type and value
+        seen_keys = set()
+        unique_findings = []
+        for finding in all_findings:
+            if finding["type"] != "error":
+                key = (finding["type"], finding["value"])
+                if key not in seen_keys:
+                    seen_keys.add(key)
+                    unique_findings.append(finding)
+            else:
+                # Keep all error findings
+                unique_findings.append(finding)
+        
         domain_result["findings"].extend(unique_findings)
-        
         results.append(domain_result)
 
     # Handle output
