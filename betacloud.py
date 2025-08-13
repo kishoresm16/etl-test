@@ -24,7 +24,6 @@ logger = logging.getLogger(__name__)
 # Constants
 # ----------------------------
 API_BASE_URL = "https://buckets.grayhatwarfare.com/api/v2/files"
-ACCESS_TOKEN = "51624b1146ebde332719e0367e91a96d"
 STOP_EXTENSIONS = "png,jpg,gif,jpeg,webp"
 
 TEXT_EXTENSIONS = (".php", ".xml", ".csv", ".json", ".txt", ".log", ".sql", ".bak")
@@ -44,8 +43,12 @@ SENSITIVE_PATTERNS = [
 # Argument Parser
 # ----------------------------
 def parse_arguments():
-    parser = argparse.ArgumentParser(description="Cloud Storage Exposure Validator (Threaded)")
+    parser = argparse.ArgumentParser(
+        description="Cloud Storage Exposure Validator (Threaded)",
+        epilog="Example: python script.py -d example.com --apikey YOUR_API_KEY --threads 20 --output-file results.json"
+    )
     parser.add_argument("-d", "--domain", required=True, help="Target domain name (e.g., example.com)")
+    parser.add_argument("--apikey", required=True, help="GrayHatWarfare API key")
     parser.add_argument("--output-file", default="cloud_results.json", help="Output JSON file name")
     parser.add_argument("--threads", type=int, default=10, help="Number of threads (default: 10)")
     return parser.parse_args()
@@ -53,13 +56,13 @@ def parse_arguments():
 # ----------------------------
 # Fetch Bucket Files
 # ----------------------------
-def fetch_bucket_data(domain):
+def fetch_bucket_data(domain, api_key):
     params = {
         "is_open": 1,
         "keywords": domain,
         "full-path": "true",
         "stopextensions": STOP_EXTENSIONS,
-        "access_token": ACCESS_TOKEN,
+        "access_token": api_key,
         "start": 0,
         "limit": 1000
     }
@@ -200,9 +203,9 @@ def export_results(findings, output_file):
 # ----------------------------
 def main():
     args = parse_arguments()
-    logger.info(f"Scanning: {args.domain} with {args.threads} threads")
+    logger.info(f"Scanning: {args.domain} with {args.threads} threads using API key: {args.apikey}")
 
-    files = fetch_bucket_data(args.domain)
+    files = fetch_bucket_data(args.domain, args.apikey)
     validated_results = process_findings_threaded(files, args.domain, args.threads)
     export_results(validated_results, args.output_file)
 
