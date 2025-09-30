@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+"""
+Usage:
+  python3 httpx_techstack_to_json.py subdomains.txt
+or (pipe):
+  httpx -l subdomains.txt -silent -tech-detect -json | python3 httpx_techstack_to_json.py
+"""
+
+import sys
+import json
+import subprocess
+from pathlib import Path
+from urllib.parse import urlparse
+import re
+
+def is_ip_address(s):
+    return re.match(r'^\d{1,3}(\.\d{1,3}){3}$', s) is not None
+
+def extract_hostname(value):
+    """Extract hostname from a URL or host string, skipping IPs."""
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    if value.startswith("http://") or value.startswith("https://"):
+        parsed = urlparse(value)
+        hostname = parsed.hostname
+        if hostname and not is_ip_address(hostname):
+            return hostname
+    elif not is_ip_address(value):
+        return value
+    return None
+
+def host_from_obj(obj):
+    # Check common fields and extract clean host
+    for k in ("host", "input", "url", "target"):
+        if k in obj:
+            host = extract_hostname(obj[k])
+            if host:
+                return host
+    return None
+
+def extract_tech_list(obj):
+    candidates = []
+    for k in ("technologies", "technology", "tech", "techstack", "techs"):
+        if k in obj:
+            candidates = obj[k]
+            break
+
+    tech_names = []
+    if isinstance(candidates, list):
+        for t in candidates:
+            if isinstance(t, str):
+                tech_names.append(t)
+            elif isinstance(t, dict):
+                for name_key in ("name", "title", "technology", "tech"):
+                    if name_key in t and isinstance(t[name_key], str):
+                        tech_names.append(t[name_key])
+                        break
+                else:
+                    tech_names.append(json.dumps(t))
+    elif isinstance(candidates, dict):
+        for k, v in candidates.items():
+            if isinstance(k, str):
+                tech_names.append(k)
+            elif isinstance(v, dict) and "name" in v:
+                tech_names.append(v["name"])
+
+    # Remove duplicates and empty values
+    return sorted(set(t.strip() for t in tech_names if t and isinstance(t, str)))
+
+def run_httpx(file_path):
+    cmd = ["httpx", "-l", str(file_path), "-silent", "-tech-detect", "-json"]
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if proc.returncode not in (0, 1):
+        print("httpx failed:", proc.stderr, file=sys.stderr)
+        sys.exit(proc.returncode)
+    return proc.stdout
+
+def main():
+    # Read from file or stdin
+    if len(sys.argv) > 1 and Path(sys.argv[1]).exists():
+        stdout = run_httpx(sys.argv[1])
+        data_lines = [line for line in stdout.splitlines() if line.strip()]
+    else:
+        data_lines = [line for line in sys.stdin if line.strip()]
+
+    results = {}
+
+    for line in data_lines:
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        host = host_from_obj(obj)
+        techs = extract_tech_list(obj)
+        if host:
+            results[host] = techs
+
+    print(json.dumps(results, indent=2))
+
+if __name__ == "__main__":
+    main()
